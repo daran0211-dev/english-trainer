@@ -41,9 +41,12 @@ def save_content(title: str, source_type: str, raw_text: str,
     return res.data[0]['id']
 
 
-def list_contents() -> list[dict]:
+def list_contents(user_id: int | None = None) -> list[dict]:
     sb = _client()
-    res = sb.table('contents').select('*, users(nickname)').order('id', desc=True).execute()
+    query = sb.table('contents').select('*, users(nickname)').order('id', desc=True)
+    if user_id is not None:
+        query = query.eq('created_by', user_id)
+    res = query.execute()
     result = []
     for r in res.data:
         r['nickname'] = (r.pop('users') or {}).get('nickname', '')

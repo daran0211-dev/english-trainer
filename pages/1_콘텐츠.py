@@ -115,7 +115,7 @@ st.subheader("저장된 콘텐츠")
 
 SOURCE_ICONS = {'youtube': '🎬', 'pdf': '📄', 'docx': '📄', 'text': '📝'}
 
-contents = list_contents()
+contents = list_contents(user_id=st.session_state['user_id'])
 if not contents:
     st.info("아직 추가된 콘텐츠가 없습니다. 위에서 파일이나 유튜브 URL을 추가해보세요.")
 else:

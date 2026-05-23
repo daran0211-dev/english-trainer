@@ -10,7 +10,7 @@ st.title("✏️ 학습")
 
 require_login()
 
-contents = list_contents()
+contents = list_contents(user_id=st.session_state['user_id'])
 if not contents:
     st.info("콘텐츠가 없습니다. 먼저 **콘텐츠** 페이지에서 추가해주세요.")
     st.stop()

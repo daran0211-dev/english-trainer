@@ -79,11 +79,17 @@ def save_content(title: str, source_type: str, raw_text: str,
         return cur.lastrowid
 
 
-def list_contents() -> list[dict]:
+def list_contents(user_id: int | None = None) -> list[dict]:
     with _conn() as con:
-        rows = con.execute(
-            "SELECT c.*, u.nickname FROM contents c LEFT JOIN users u ON c.created_by=u.id ORDER BY c.id DESC"
-        ).fetchall()
+        if user_id is not None:
+            rows = con.execute(
+                "SELECT c.*, u.nickname FROM contents c LEFT JOIN users u ON c.created_by=u.id "
+                "WHERE c.created_by=? ORDER BY c.id DESC", (user_id,)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT c.*, u.nickname FROM contents c LEFT JOIN users u ON c.created_by=u.id ORDER BY c.id DESC"
+            ).fetchall()
         result = []
         for r in rows:
             d = dict(r)
