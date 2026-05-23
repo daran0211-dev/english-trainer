@@ -1,0 +1,19 @@
+# Streamlit secrets (로컬 전용 — 절대 GitHub에 올리지 마세요)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# SQLite DB (로컬 전용)
+*.db
+*.sqlite
+
+# macOS
+.DS_Store
+
+# 가상환경
+venv/
+.venv/
