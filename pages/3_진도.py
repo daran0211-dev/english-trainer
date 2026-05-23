@@ -9,7 +9,10 @@ require_login()
 
 user_id = st.session_state['user_id']
 nickname = st.session_state['nickname']
-contents = list_contents(user_id=user_id)
+try:
+    contents = list_contents(user_id=user_id)
+except Exception:
+    contents = []
 
 if not contents:
     st.info("아직 콘텐츠가 없습니다.")
