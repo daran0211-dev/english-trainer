@@ -1,57 +1,22 @@
 """
-쿠키에 닉네임을 저장해 새로고침/페이지 이동 후에도 로그인 상태를 유지합니다.
+URL 쿼리 파라미터(?u=닉네임)로 로그인 상태를 유지합니다.
+- 페이지 이동 시: session_state가 유지되므로 자동으로 쿼리 파라미터 갱신
+- 새로고침 시: URL의 ?u= 값으로 세션 복원
 """
 from __future__ import annotations
 import streamlit as st
-from streamlit_cookies_controller import CookieController
 from core.db import get_or_create_user
-
-COOKIE_NAME = 'et_nickname'  # english-trainer nickname
-
-
-def require_login(message: str = "먼저 홈 화면에서 닉네임으로 시작해주세요."):
-    """
-    로그인 상태가 아니면 쿠키에서 복원 시도.
-    실패 시 경고 메시지를 표시하고 페이지를 중단.
-    """
-    if 'user_id' in st.session_state:
-        return  # 이미 로그인됨
-
-    # 쿠키에서 복원 시도
-    controller = CookieController(key='auth_restore')
-    cookies = controller.getAll()
-
-    if cookies is None:
-        # 첫 렌더링: 쿠키 아직 로드 안 됨 → 자동 재실행 대기
-        st.stop()
-
-    saved = cookies.get(COOKIE_NAME, '').strip()
-    if saved:
-        try:
-            user = get_or_create_user(saved)
-            st.session_state['user_id'] = user['id']
-            st.session_state['nickname'] = user['nickname']
-            st.rerun()
-        except Exception:
-            pass
-
-    if 'user_id' not in st.session_state:
-        st.warning(message)
-        st.stop()
 
 
 def restore_session():
-    """홈(app.py)에서 세션 복원용"""
+    """홈(app.py)에서 호출. 쿼리 파라미터로 세션 복원."""
     if 'user_id' in st.session_state:
+        # 이미 로그인 상태 → 쿼리 파라미터 유지
+        if 'u' not in st.query_params:
+            st.query_params['u'] = st.session_state['nickname']
         return
 
-    controller = CookieController(key='auth_home')
-    cookies = controller.getAll()
-
-    if cookies is None:
-        return  # 첫 렌더링, 쿠키 아직 없음 — 자동 재실행됨
-
-    saved = cookies.get(COOKIE_NAME, '').strip()
+    saved = st.query_params.get('u', '').strip()
     if saved:
         try:
             user = get_or_create_user(saved)
@@ -62,18 +27,37 @@ def restore_session():
 
 
 def save_login(nickname: str):
-    """로그인 시 쿠키에 닉네임 저장 (유효기간 30일)"""
-    try:
-        controller = CookieController(key='auth_save')
-        controller.set(COOKIE_NAME, nickname, max_age=30 * 24 * 60 * 60)
-    except Exception:
-        pass
+    """로그인 시 쿼리 파라미터에 닉네임 저장."""
+    st.query_params['u'] = nickname
 
 
 def clear_login():
-    """로그아웃 시 쿠키 삭제"""
-    try:
-        controller = CookieController(key='auth_clear')
-        controller.remove(COOKIE_NAME)
-    except Exception:
-        pass
+    """로그아웃 시 쿼리 파라미터 삭제."""
+    st.query_params.clear()
+
+
+def require_login(message: str = "먼저 홈 화면에서 닉네임으로 시작해주세요."):
+    """
+    각 페이지 상단에서 호출.
+    1) session_state에 user_id 있으면 → 쿼리 파라미터 갱신 후 통과
+    2) 쿼리 파라미터 ?u= 있으면 → 세션 복원 후 통과
+    3) 둘 다 없으면 → 경고 후 중단
+    """
+    if 'user_id' in st.session_state:
+        # 페이지 이동 후 첫 렌더 → 이 페이지 URL에도 ?u= 추가
+        if 'u' not in st.query_params:
+            st.query_params['u'] = st.session_state['nickname']
+        return
+
+    saved = st.query_params.get('u', '').strip()
+    if saved:
+        try:
+            user = get_or_create_user(saved)
+            st.session_state['user_id'] = user['id']
+            st.session_state['nickname'] = user['nickname']
+            return
+        except Exception:
+            pass
+
+    st.warning(message)
+    st.stop()
