@@ -4,6 +4,7 @@ from core.blanker import make_blanks, hint_char, blank_display
 from core.scorer import check_all
 from core.translator import translate_to_korean
 from core.auth import require_login
+from core.inline_blanks_component import inline_blanks_input
 
 st.set_page_config(page_title="학습", layout="centered", page_icon="✏️")
 st.title("✏️ 학습")
@@ -83,33 +84,6 @@ if result_key not in st.session_state:
 hints   = st.session_state[state_key]
 results = st.session_state[result_key]
 
-# ── 문장 표시 ─────────────────────────────────────────────────────────
-st.markdown("**문장:**")
-
-display_parts = []
-blank_cursor = 0
-for t in tokens:
-    if t['blank']:
-        placeholder = hint_char(t['answer']) if hints[blank_cursor] else blank_display(t['answer'])
-        if results is not None:
-            color = 'green' if results[0][blank_cursor] else 'red'
-            display_parts.append(
-                f"<span style='color:{color};font-weight:bold'>[{t['answer']}]</span>"
-            )
-        else:
-            display_parts.append(
-                f"<span style='background:#e8f0fe;padding:2px 6px;"
-                f"border-radius:4px;font-family:monospace'>{placeholder}</span>"
-            )
-        blank_cursor += 1
-    else:
-        display_parts.append(t['token'])
-
-st.markdown(
-    f"<p style='font-size:1.1em;line-height:2'>{''.join(display_parts)}</p>",
-    unsafe_allow_html=True
-)
-
 # ── 한국어 번역 토글 ──────────────────────────────────────────────────
 show_kr_key = f"show_kr_{content_id}_{sent_idx}"
 if show_kr_key not in st.session_state:
@@ -125,14 +99,12 @@ with col_kr:
         st.rerun()
 
 if st.session_state[show_kr_key]:
-    # DB 캐시 확인 → 없으면 번역 후 저장
     korean = get_translation(content_id, sent_idx)
     if not korean:
         with st.spinner("번역 중..."):
             korean = translate_to_korean(sentence)
             if korean:
                 save_translation(content_id, sent_idx, korean)
-
     if korean:
         st.markdown(
             f"<div style='background:#f0f4ff;border-left:3px solid #4F8EF7;"
@@ -145,57 +117,44 @@ if st.session_state[show_kr_key]:
 
 st.markdown("")
 
-# ── 입력 폼 ───────────────────────────────────────────────────────────
+# ── 인라인 빈칸 입력 컴포넌트 ─────────────────────────────────────────
+result_list_display = results[0] if results else None
+
+component_value = inline_blanks_input(
+    tokens=tokens,
+    hints=hints,
+    results=result_list_display,
+    key=f"blanks_{content_id}_{sent_idx}_{stage}",
+)
+
+# 제출 처리
+if component_value and component_value.get('type') == 'submit' and results is None:
+    user_inputs = component_value['answers']
+    result_list, correct, total = check_all(user_inputs, tokens)
+    st.session_state[result_key] = (result_list, correct, total)
+    new_attempts     = prog['attempts'] + 1
+    new_correct      = prog['correct'] + correct
+    new_total_blanks = prog.get('total_blanks', 0) + total
+    all_correct      = correct == total
+    next_stage       = min(stage + 1, 5) if all_correct else stage
+    completed        = 1 if all_correct and stage == 5 else prog['completed']
+    upsert_progress(user_id, content_id, sent_idx,
+                    next_stage, new_attempts, new_correct, new_total_blanks, completed)
+    st.rerun()
+
+# ── 결과 표시 & 버튼 ──────────────────────────────────────────────────
 if results is None:
-    with st.form(key=f"form_{content_id}_{sent_idx}_{stage}"):
-        user_inputs = []
-        cols_per_row = 3
-        for row_start in range(0, n_blanks, cols_per_row):
-            cols = st.columns(min(cols_per_row, n_blanks - row_start))
-            for j, col in enumerate(cols):
-                idx = row_start + j
-                tok = blank_tokens[idx]
-                hint_text = f"힌트: {hint_char(tok['answer'])}" if hints[idx] else f"{'_'*len(tok['answer'])}"
-                with col:
-                    val = st.text_input(
-                        f"빈칸 {idx+1}",
-                        placeholder=hint_text,
-                        key=f"inp_{content_id}_{sent_idx}_{stage}_{idx}",
-                        label_visibility='collapsed'
-                    )
-                    user_inputs.append(val)
-
-        col_hint, col_submit, col_skip = st.columns(3)
-        with col_hint:
-            hint_btn = st.form_submit_button("💡 힌트", use_container_width=True)
-        with col_submit:
-            submit_btn = st.form_submit_button("✅ 제출", type='primary', use_container_width=True)
-        with col_skip:
-            skip_btn = st.form_submit_button("⏭ 건너뛰기", use_container_width=True)
-
-    if hint_btn:
-        for i in range(n_blanks):
-            if not hints[i]:
-                st.session_state[state_key][i] = True
-                break
-        st.rerun()
-
-    if submit_btn:
-        result_list, correct, total = check_all(user_inputs, tokens)
-        st.session_state[result_key] = (result_list, correct, total)
-        new_attempts      = prog['attempts'] + 1
-        new_correct       = prog['correct'] + correct
-        new_total_blanks  = prog.get('total_blanks', 0) + total
-        all_correct       = correct == total
-        next_stage        = min(stage + 1, 5) if all_correct else stage
-        completed         = 1 if all_correct and stage == 5 else prog['completed']
-        upsert_progress(user_id, content_id, sent_idx,
-                        next_stage, new_attempts, new_correct, new_total_blanks, completed)
-        st.rerun()
-
-    if skip_btn:
-        st.info("건너뛰었습니다. 다음 문장을 선택해주세요.")
-
+    col_hint, col_skip = st.columns(2)
+    with col_hint:
+        if st.button("💡 힌트", use_container_width=True):
+            for i in range(n_blanks):
+                if not hints[i]:
+                    st.session_state[state_key][i] = True
+                    break
+            st.rerun()
+    with col_skip:
+        if st.button("⏭ 건너뛰기", use_container_width=True):
+            st.info("건너뛰었습니다. 다음 문장을 선택해주세요.")
 else:
     result_list, correct, total = results
     if correct == total:
