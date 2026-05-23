@@ -1,18 +1,13 @@
 import streamlit as st
 from core.db import init_db, get_or_create_user
+from core.auth import restore_session, save_login, clear_login
 
 init_db()
 
 st.set_page_config(page_title="영어 암기 트레이너", layout="centered", page_icon="🧠")
 
 # ── 새로고침 후 자동 로그인 복원 ──────────────────────────────────────
-# URL 쿼리 파라미터 ?u=닉네임 에 저장 → 새로고침/페이지 이동 후 복원
-if 'user_id' not in st.session_state:
-    saved = st.query_params.get('u', '').strip()
-    if saved:
-        user = get_or_create_user(saved)
-        st.session_state['user_id'] = user['id']
-        st.session_state['nickname'] = user['nickname']
+restore_session()
 
 # ── 사이드바 ──────────────────────────────────────────────────────────
 with st.sidebar:
@@ -20,9 +15,9 @@ with st.sidebar:
     if 'nickname' in st.session_state:
         st.success(f"👤 {st.session_state['nickname']}")
         if st.button("로그아웃"):
+            clear_login()
             del st.session_state['nickname']
             del st.session_state['user_id']
-            st.query_params.clear()
             st.rerun()
     else:
         st.info("로그인 후 이용하세요")
@@ -49,12 +44,9 @@ if 'user_id' not in st.session_state:
             user = get_or_create_user(nickname.strip())
             st.session_state['user_id'] = user['id']
             st.session_state['nickname'] = user['nickname']
-            st.query_params['u'] = user['nickname']   # URL에 저장
+            save_login(user['nickname'])   # 쿠키에 저장 (30일 유지)
             st.rerun()
 else:
-    # 로그인 상태 진입 시 URL 파라미터 유지
-    if 'u' not in st.query_params:
-        st.query_params['u'] = st.session_state['nickname']
     st.success(f"안녕하세요, **{st.session_state['nickname']}** 님! 👋")
     st.markdown("---")
     st.markdown("""

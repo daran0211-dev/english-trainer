@@ -1,26 +1,53 @@
 """
-새로고침 후 로그인 상태를 복원하는 헬퍼.
-URL 쿼리 파라미터 ?u=닉네임 에 로그인 정보를 저장해 두고,
-session_state가 비어 있을 때 자동으로 복원합니다.
+쿠키에 닉네임을 저장해 새로고침/페이지 이동 후에도 로그인 상태를 유지합니다.
 """
 from __future__ import annotations
 import streamlit as st
+from streamlit_cookies_controller import CookieController
 from core.db import get_or_create_user
+
+COOKIE_NAME = 'et_nickname'  # english-trainer nickname
+
+
+def _controller() -> CookieController:
+    return CookieController()
 
 
 def restore_session() -> bool:
     """
-    session_state에 user_id가 없으면 URL 파라미터에서 닉네임을 읽어 복원.
+    session_state에 user_id가 없으면 쿠키에서 닉네임을 읽어 복원.
     로그인 상태면 True, 비로그인이면 False 반환.
     """
     if 'user_id' not in st.session_state:
-        saved = st.query_params.get('u', '').strip()
-        if saved:
-            user = get_or_create_user(saved)
-            st.session_state['user_id'] = user['id']
-            st.session_state['nickname'] = user['nickname']
+        try:
+            controller = _controller()
+            saved = controller.get(COOKIE_NAME)
+            if saved:
+                user = get_or_create_user(saved)
+                st.session_state['user_id'] = user['id']
+                st.session_state['nickname'] = user['nickname']
+        except Exception:
+            pass
 
     return 'user_id' in st.session_state
+
+
+def save_login(nickname: str):
+    """로그인 시 쿠키에 닉네임 저장 (유효기간 30일)"""
+    try:
+        controller = _controller()
+        controller.set(COOKIE_NAME, nickname, max_age=30 * 24 * 60 * 60)
+    except Exception:
+        pass
+
+
+def clear_login():
+    """로그아웃 시 쿠키 삭제"""
+    try:
+        controller = _controller()
+        controller.remove(COOKIE_NAME)
+    except Exception:
+        pass
 
 
 def require_login(message: str = "먼저 홈 화면에서 닉네임으로 시작해주세요."):
