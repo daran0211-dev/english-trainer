@@ -101,6 +101,21 @@ def upsert_progress(user_id: int, content_id: int, sentence_index: int,
     }, on_conflict='user_id,content_id,sentence_index').execute()
 
 
+def skip_sentence(user_id: int, content_id: int, sentence_index: int):
+    """문장을 건너뜀 상태(stage=0)로 저장"""
+    sb = _client()
+    sb.table('progress').upsert({
+        'user_id': user_id,
+        'content_id': content_id,
+        'sentence_index': sentence_index,
+        'stage': 0,
+        'attempts': 0,
+        'correct': 0,
+        'total_blanks': 0,
+        'completed': 0,
+    }, on_conflict='user_id,content_id,sentence_index').execute()
+
+
 def get_recent_content_id(user_id: int) -> int | None:
     """가장 최근에 학습한 content_id 반환"""
     sb = _client()

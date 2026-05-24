@@ -165,6 +165,16 @@ def save_translation(content_id: int, sentence_index: int, korean: str):
         """, (content_id, sentence_index, korean))
 
 
+def skip_sentence(user_id: int, content_id: int, sentence_index: int):
+    """문장을 건너뜀 상태(stage=0)로 저장"""
+    with _conn() as con:
+        con.execute("""
+        INSERT INTO progress(user_id,content_id,sentence_index,stage,attempts,correct,total_blanks,completed,last_practiced)
+        VALUES(?,?,?,0,0,0,0,0,datetime('now'))
+        ON CONFLICT(user_id,content_id,sentence_index) DO UPDATE SET stage=0
+        """, (user_id, content_id, sentence_index))
+
+
 def get_recent_content_id(user_id: int) -> int | None:
     """가장 최근에 학습한 content_id 반환"""
     with _conn() as con:

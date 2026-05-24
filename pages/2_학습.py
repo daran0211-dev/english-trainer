@@ -1,5 +1,5 @@
 import streamlit as st
-from core.db import list_contents, get_progress, upsert_progress, get_translation, save_translation, get_recent_content_id
+from core.db import list_contents, get_progress, upsert_progress, get_translation, save_translation, get_recent_content_id, skip_sentence
 from core.blanker import make_blanks, hint_char, blank_display
 from core.scorer import check_all
 from core.translator import translate_to_korean
@@ -41,33 +41,27 @@ completed_count = sum(1 for p in prog_list if p['completed'])
 
 st.progress(completed_count / len(sentences), text=f"완료: {completed_count} / {len(sentences)} 문장")
 
-# 건너뛴 문장 추적 (세션 내 유지)
-skip_key = f"skipped_{content_id}"
-if skip_key not in st.session_state:
-    st.session_state[skip_key] = set()
-skipped = st.session_state[skip_key]
+# stage=0 → 건너뜀 (DB에 영구 저장)
+skipped_set = {i for i, p in enumerate(prog_list) if p.get('stage') == 0}
+incomplete   = [i for i, p in enumerate(prog_list) if not p['completed'] and p.get('stage') != 0]
+not_skipped  = incomplete  # 건너뜀 제외한 미완료
 
-incomplete = [i for i, p in enumerate(prog_list) if not p['completed']]
-
-# 건너뛰지 않은 미완료 문장만 자동 선택 대상
-not_skipped = [i for i in incomplete if i not in skipped]
-
-# 마지막으로 풀던 문장 기억
+# 마지막으로 풀던 문장 기억 (session_state)
 current_key = f"current_{content_id}"
 if current_key not in st.session_state:
-    st.session_state[current_key] = not_skipped[0] if not_skipped else (incomplete[0] if incomplete else 0)
+    st.session_state[current_key] = not_skipped[0] if not_skipped else 0
 
 preferred = st.session_state[current_key]
 if preferred in not_skipped:
     default_idx = preferred
 else:
-    default_idx = not_skipped[0] if not_skipped else (incomplete[0] if incomplete else 0)
+    default_idx = not_skipped[0] if not_skipped else 0
 
 sentence_labels = []
 for i, p in enumerate(prog_list):
     if p['completed']:
         status = "✅"
-    elif i in skipped:
+    elif p.get('stage') == 0:
         status = "⏭ 건너뜀"
     else:
         status = f"▶ {p['stage']}단계"
@@ -80,10 +74,10 @@ sent_idx = st.selectbox("문장 선택", range(len(sentences)),
 # 사용자가 직접 문장을 바꾸면 현재 문장 업데이트
 st.session_state[current_key] = sent_idx
 
-# 건너뛴 문장을 직접 선택하면 건너뛰기 해제
-if sent_idx in skipped:
-    st.session_state[skip_key].discard(sent_idx)
-    skipped = st.session_state[skip_key]
+# 건너뛴 문장을 직접 선택하면 건너뛰기 해제 (stage=1로 복원)
+if sent_idx in skipped_set:
+    upsert_progress(user_id, content_id, sent_idx, 1, 0, 0, 0, 0)
+    st.rerun()
 
 sentence = sentences[sent_idx]
 prog = get_progress(user_id, content_id, sent_idx)
@@ -223,7 +217,7 @@ if results is None:
         st.rerun()
 
     if skip_btn:
-        st.session_state[skip_key].add(sent_idx)
+        skip_sentence(user_id, content_id, sent_idx)
         # 건너뛴 후 다음 문장으로 이동
         remaining = [i for i in not_skipped if i != sent_idx]
         if remaining:

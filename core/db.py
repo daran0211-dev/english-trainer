@@ -28,6 +28,7 @@ if _use_cloud():
         get_translation,
         save_translation,
         get_recent_content_id,
+        skip_sentence,
     )
 else:
     from core.db_sqlite import (
@@ -43,4 +44,5 @@ else:
         get_translation,
         save_translation,
         get_recent_content_id,
+        skip_sentence,
     )
