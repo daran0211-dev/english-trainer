@@ -34,17 +34,49 @@ completed_count = sum(1 for p in prog_list if p['completed'])
 
 st.progress(completed_count / len(sentences), text=f"완료: {completed_count} / {len(sentences)} 문장")
 
+# 건너뛴 문장 추적 (세션 내 유지)
+skip_key = f"skipped_{content_id}"
+if skip_key not in st.session_state:
+    st.session_state[skip_key] = set()
+skipped = st.session_state[skip_key]
+
 incomplete = [i for i, p in enumerate(prog_list) if not p['completed']]
-default_idx = incomplete[0] if incomplete else 0
+
+# 건너뛰지 않은 미완료 문장만 자동 선택 대상
+not_skipped = [i for i in incomplete if i not in skipped]
+
+# 마지막으로 풀던 문장 기억
+current_key = f"current_{content_id}"
+if current_key not in st.session_state:
+    st.session_state[current_key] = not_skipped[0] if not_skipped else (incomplete[0] if incomplete else 0)
+
+preferred = st.session_state[current_key]
+if preferred in not_skipped:
+    default_idx = preferred
+else:
+    default_idx = not_skipped[0] if not_skipped else (incomplete[0] if incomplete else 0)
 
 sentence_labels = []
 for i, p in enumerate(prog_list):
-    status = "✅" if p['completed'] else f"▶ {p['stage']}단계"
+    if p['completed']:
+        status = "✅"
+    elif i in skipped:
+        status = "⏭ 건너뜀"
+    else:
+        status = f"▶ {p['stage']}단계"
     sentence_labels.append(f"[{i+1}] {status} — {sentences[i][:40]}...")
 
 sent_idx = st.selectbox("문장 선택", range(len(sentences)),
                          index=default_idx,
                          format_func=lambda i: sentence_labels[i])
+
+# 사용자가 직접 문장을 바꾸면 현재 문장 업데이트
+st.session_state[current_key] = sent_idx
+
+# 건너뛴 문장을 직접 선택하면 건너뛰기 해제
+if sent_idx in skipped:
+    st.session_state[skip_key].discard(sent_idx)
+    skipped = st.session_state[skip_key]
 
 sentence = sentences[sent_idx]
 prog = get_progress(user_id, content_id, sent_idx)
@@ -184,7 +216,12 @@ if results is None:
         st.rerun()
 
     if skip_btn:
-        st.info("건너뛰었습니다. 다음 문장을 선택해주세요.")
+        st.session_state[skip_key].add(sent_idx)
+        # 건너뛴 후 다음 문장으로 이동
+        remaining = [i for i in not_skipped if i != sent_idx]
+        if remaining:
+            st.session_state[current_key] = remaining[0]
+        st.rerun()
 
 else:
     result_list, correct, total = results
