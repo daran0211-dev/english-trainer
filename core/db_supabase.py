@@ -101,6 +101,16 @@ def upsert_progress(user_id: int, content_id: int, sentence_index: int,
     }, on_conflict='user_id,content_id,sentence_index').execute()
 
 
+def get_recent_content_id(user_id: int) -> int | None:
+    """가장 최근에 학습한 content_id 반환"""
+    sb = _client()
+    res = sb.table('progress').select('content_id, updated_at') \
+        .eq('user_id', user_id) \
+        .order('updated_at', desc=True) \
+        .limit(1).execute()
+    return res.data[0]['content_id'] if res.data else None
+
+
 def get_all_progress(user_id: int, content_id: int) -> list[dict]:
     sb = _client()
     res = sb.table('progress').select('*') \

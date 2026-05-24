@@ -27,6 +27,7 @@ if _use_cloud():
         get_all_progress,
         get_translation,
         save_translation,
+        get_recent_content_id,
     )
 else:
     from core.db_sqlite import (
@@ -41,4 +42,5 @@ else:
         get_all_progress,
         get_translation,
         save_translation,
+        get_recent_content_id,
     )

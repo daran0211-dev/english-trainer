@@ -1,5 +1,5 @@
 import streamlit as st
-from core.db import list_contents, get_progress, upsert_progress, get_translation, save_translation
+from core.db import list_contents, get_progress, upsert_progress, get_translation, save_translation, get_recent_content_id
 from core.blanker import make_blanks, hint_char, blank_display
 from core.scorer import check_all
 from core.translator import translate_to_korean
@@ -23,7 +23,14 @@ user_id = st.session_state['user_id']
 
 # ── 콘텐츠 선택 ──────────────────────────────────────────────────────
 content_map = {c['title']: c for c in contents}
-selected_title = st.selectbox("콘텐츠 선택", list(content_map.keys()))
+titles = list(content_map.keys())
+
+# 가장 최근 학습한 콘텐츠를 기본값으로
+recent_id = get_recent_content_id(user_id)
+recent_title = next((c['title'] for c in contents if c['id'] == recent_id), None)
+default_content_idx = titles.index(recent_title) if recent_title in titles else 0
+
+selected_title = st.selectbox("콘텐츠 선택", titles, index=default_content_idx)
 content = content_map[selected_title]
 sentences = content['sentences']
 content_id = content['id']

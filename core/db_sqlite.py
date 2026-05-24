@@ -165,6 +165,17 @@ def save_translation(content_id: int, sentence_index: int, korean: str):
         """, (content_id, sentence_index, korean))
 
 
+def get_recent_content_id(user_id: int) -> int | None:
+    """가장 최근에 학습한 content_id 반환"""
+    with _conn() as con:
+        row = con.execute(
+            "SELECT content_id FROM progress WHERE user_id=? AND last_practiced IS NOT NULL "
+            "ORDER BY last_practiced DESC LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        return row['content_id'] if row else None
+
+
 def get_all_progress(user_id: int, content_id: int) -> list[dict]:
     with _conn() as con:
         rows = con.execute(
