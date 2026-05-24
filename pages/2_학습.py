@@ -81,7 +81,7 @@ if sent_idx in skipped_set:
 
 sentence = sentences[sent_idx]
 prog = get_progress(user_id, content_id, sent_idx)
-stage = prog['stage']
+stage = prog['stage'] if prog['stage'] > 0 else 1  # 건너뜀 상태면 1단계로 표시
 
 st.markdown("---")
 
@@ -217,8 +217,11 @@ if results is None:
         st.rerun()
 
     if skip_btn:
-        skip_sentence(user_id, content_id, sent_idx)
-        # 건너뛴 후 다음 문장으로 이동
+        # stage=0 으로 DB에 저장 (건너뜀 영구 기록)
+        upsert_progress(user_id, content_id, sent_idx,
+                        0, prog['attempts'], prog['correct'],
+                        prog.get('total_blanks', 0), 0)
+        # 다음 문장으로 이동
         remaining = [i for i in not_skipped if i != sent_idx]
         if remaining:
             st.session_state[current_key] = remaining[0]
